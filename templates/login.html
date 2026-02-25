@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login - Phishing Detector</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="navbar">
+    <a href="/login">Login</a>
+    <a href="/">Home</a>
+    <a href="/history">History</a>
+    <a href="/admin">Admin</a>
+</div>
+
+<div class="container">
+    <h2>🔐 Login</h2>
+
+    <form method="POST">
+        <input type="text" name="username" placeholder="Username" required><br><br>
+        <input type="password" name="password" placeholder="Password" required><br><br>
+        <button type="submit">Login</button>
+    </form>
+
+    {% if error %}
+    <div class="result">
+        {{ error }}
+    </div>
+    {% endif %}
+</div>
+
+</body>
+</html>

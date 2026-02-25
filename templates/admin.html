@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Admin Panel</h1>
+
+<form method="POST">
+    <input type="text" name="domain" placeholder="Enter domain to blacklist" required>
+    <button type="submit">Add to Blacklist</button>
+</form>
+
+{% if message %}
+<p>{{ message }}</p>
+{% endif %}
+{% endblock %}
