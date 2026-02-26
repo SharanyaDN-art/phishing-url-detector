@@ -1,9 +1,14 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, redirect, url_for, session
 import re
 import sqlite3
 from datetime import datetime
 
 app = Flask(__name__)
+app.secret_key = "supersecretkey123"  # Change this in production
+
+# Hardcoded login credentials
+USERNAME = "admin"
+PASSWORD = "password123"
 
 # -----------------------------
 # DATABASE INITIALIZATION
@@ -37,17 +42,15 @@ def init_db():
 
 init_db()
 
-
 # -----------------------------
 # PHISHING DETECTION LOGIC
 # -----------------------------
 def check_url(url):
     score = 0
 
-    # Extract domain
     domain = url.replace("http://", "").replace("https://", "").split("/")[0]
 
-    # Check blacklist first
+    # Check blacklist
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM blacklist WHERE domain = ?", (domain,))
@@ -57,11 +60,11 @@ def check_url(url):
     if blacklisted:
         return 10, "❌ Phishing (Blacklisted Domain)"
 
-    # Check IP address
+    # IP address check
     if re.search(r'\d+\.\d+\.\d+\.\d+', url):
         score += 2
 
-    # Check URL length
+    # Long URL check
     if len(url) > 75:
         score += 1
 
@@ -79,19 +82,13 @@ def check_url(url):
     return score, result
 
 # -----------------------------
-# SIMPLE LOGIN PAGE
+# LOGIN PAGE
 # -----------------------------
-from flask import redirect, url_for, session
-
-# Secret key for session management
-app.secret_key = "supersecretkey123"  # change to a random string in production
-
-# Hardcoded username/password
-USERNAME = "admin"
-PASSWORD = "password123"
-
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    if session.get("logged_in"):
+        return redirect(url_for("home"))
+
     error = None
     if request.method == "POST":
         username = request.form["username"]
@@ -105,19 +102,28 @@ def login():
 
     return render_template("login.html", error=error)
 
+# -----------------------------
+# LOGOUT
+# -----------------------------
+@app.route("/logout")
+def logout():
+    session.pop("logged_in", None)
+    return redirect(url_for("login"))
 
 # -----------------------------
 # HOME PAGE
 # -----------------------------
 @app.route("/", methods=["GET", "POST"])
 def home():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
     result = None
     
     if request.method == "POST":
         url = request.form["url"]
         score, result = check_url(url)
 
-        # Save scan result
         conn = sqlite3.connect("database.db")
         cursor = conn.cursor()
         cursor.execute("""
@@ -130,12 +136,14 @@ def home():
 
     return render_template("index.html", result=result)
 
-
 # -----------------------------
 # HISTORY PAGE
 # -----------------------------
 @app.route("/history")
 def history():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
     cursor.execute("SELECT url, risk_score, result, scan_time FROM scan_history ORDER BY id DESC")
@@ -144,12 +152,30 @@ def history():
 
     return render_template("history.html", data=data)
 
+# -----------------------------
+# ADMIN PANEL
+# -----------------------------
+@app.route("/admin")
+def admin():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = sqlite3.connect("database.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT domain, added_date FROM blacklist ORDER BY id DESC")
+    data = cursor.fetchall()
+    conn.close()
+
+    return render_template("admin.html", data=data)
 
 # -----------------------------
-# ADD TO BLACKLIST (ADMIN)
+# ADD TO BLACKLIST
 # -----------------------------
 @app.route("/add_blacklist", methods=["POST"])
 def add_blacklist():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
     domain = request.form["domain"]
 
     conn = sqlite3.connect("database.db")
@@ -162,20 +188,7 @@ def add_blacklist():
     conn.commit()
     conn.close()
 
-    return "Domain added to blacklist successfully!"
-
-# -----------------------------
-# ADMIN PANEL PAGE
-# -----------------------------
-@app.route("/admin")
-def admin():
-    conn = sqlite3.connect("database.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT domain, added_date FROM blacklist ORDER BY id DESC")
-    data = cursor.fetchall()
-    conn.close()
-
-    return render_template("admin.html", data=data)
+    return redirect(url_for("admin"))
 
 # -----------------------------
 # RUN APP
